@@ -1,9 +1,31 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+
+// Placeholder image for preview (since actual blog images aren't available locally)
+const PLACEHOLDER_IMAGE = "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=1200&h=630&fit=crop";
+const PLACEHOLDER_CONTENT_IMAGE = "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=800&h=400&fit=crop";
+
+// Check if an image path is a local path that won't work in preview
+function getPreviewImageUrl(imagePath: string, isContentImage = false): string {
+  if (!imagePath) return isContentImage ? PLACEHOLDER_CONTENT_IMAGE : PLACEHOLDER_IMAGE;
+
+  // Local paths like /images/blog/... won't work in preview
+  if (imagePath.startsWith("/images/") || imagePath.startsWith("/public/")) {
+    return isContentImage ? PLACEHOLDER_CONTENT_IMAGE : PLACEHOLDER_IMAGE;
+  }
+
+  // External URLs should work
+  if (imagePath.startsWith("http://") || imagePath.startsWith("https://")) {
+    return imagePath;
+  }
+
+  // Default to placeholder
+  return isContentImage ? PLACEHOLDER_CONTENT_IMAGE : PLACEHOLDER_IMAGE;
+}
 
 function PreviewContent() {
   const searchParams = useSearchParams();
@@ -43,9 +65,17 @@ function PreviewContent() {
     day: "numeric",
   });
 
+  // Get preview-safe image URL
+  const featuredImageUrl = getPreviewImageUrl(meta.image, false);
+
   return (
     <main style={styles.main}>
       <article style={styles.article}>
+        {/* Preview Banner */}
+        <div style={styles.previewBanner}>
+          Preview Mode - Images shown are placeholders
+        </div>
+
         {/* Header */}
         <header style={styles.header}>
           <h1 style={styles.title}>{meta.title}</h1>
@@ -59,13 +89,9 @@ function PreviewContent() {
         {/* Featured Image */}
         <div style={styles.featuredImage}>
           <img
-            src={meta.image}
+            src={featuredImageUrl}
             alt={meta.title}
             style={styles.image}
-            onError={(e) => {
-              (e.target as HTMLImageElement).src =
-                "https://via.placeholder.com/1200x630/1a1a2e/ffffff?text=Blog+Image";
-            }}
           />
         </div>
 
@@ -98,13 +124,9 @@ function PreviewContent() {
               img: ({ src, alt }) => (
                 <figure style={styles.figure}>
                   <img
-                    src={src || ""}
+                    src={getPreviewImageUrl(src || "", true)}
                     alt={alt || ""}
                     style={styles.contentImage}
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src =
-                        "https://via.placeholder.com/800x400/1a1a2e/ffffff?text=Image";
-                    }}
                   />
                   {alt && alt !== "image" && (
                     <figcaption style={styles.figcaption}>{alt}</figcaption>
@@ -160,6 +182,16 @@ const styles: { [key: string]: React.CSSProperties } = {
   article: {
     maxWidth: "800px",
     margin: "0 auto",
+  },
+  previewBanner: {
+    background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+    color: "#fff",
+    padding: "12px 20px",
+    borderRadius: "8px",
+    textAlign: "center",
+    fontSize: "14px",
+    fontWeight: "500",
+    marginBottom: "32px",
   },
   header: {
     marginBottom: "32px",

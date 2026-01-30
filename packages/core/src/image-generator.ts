@@ -1,4 +1,3 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import * as fs from "fs/promises";
 import * as path from "path";
 import type { GeneratedImages } from "./types.js";
@@ -7,7 +6,7 @@ import type { GeneratedImages } from "./types.js";
 const DEFAULT_IMAGE = "/images/blog/blog-img-6.png";
 
 /**
- * Generate blog images using Gemini's Imagen model (Nano Banana)
+ * Generate blog images using Gemini's Imagen model
  * Returns default image path if generation fails
  */
 export async function generateBlogImages(
@@ -17,25 +16,23 @@ export async function generateBlogImages(
   outputDir: string
 ): Promise<GeneratedImages> {
   try {
-    const genAI = new GoogleGenerativeAI(apiKey);
+    // Ensure output directory exists
+    await fs.mkdir(outputDir, { recursive: true });
 
-    // Use Gemini's image generation model
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
-
-    // Generate cover image prompt based on blog content
+    // Generate cover image
+    console.log("Generating cover image with Gemini Imagen...");
     const coverPrompt = createCoverImagePrompt(title, description);
-    const postPrompt = createPostImagePrompt(title, description);
-
-    console.log("Generating cover image...");
-    const coverImagePath = await generateAndSaveImage(
-      model,
+    const coverImagePath = await generateImageWithREST(
+      apiKey,
       coverPrompt,
       path.join(outputDir, "blog-cover.png")
     );
 
-    console.log("Generating post image...");
-    const postImagePath = await generateAndSaveImage(
-      model,
+    // Generate post image
+    console.log("Generating post image with Gemini Imagen...");
+    const postPrompt = createPostImagePrompt(title, description);
+    const postImagePath = await generateImageWithREST(
+      apiKey,
       postPrompt,
       path.join(outputDir, "blog-img.png")
     );
@@ -50,6 +47,119 @@ export async function generateBlogImages(
       coverImage: DEFAULT_IMAGE,
       postImage: DEFAULT_IMAGE,
     };
+  }
+}
+
+/**
+ * Generate image using Gemini REST API directly
+ * This uses the imagen-3.0-generate-002 model for image generation
+ */
+async function generateImageWithREST(
+  apiKey: string,
+  prompt: string,
+  outputPath: string
+): Promise<string> {
+  try {
+    // Use Imagen 3 model for image generation
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          instances: [{ prompt }],
+          parameters: {
+            sampleCount: 1,
+            aspectRatio: "16:9",
+            personGeneration: "DONT_ALLOW",
+            safetySetting: "BLOCK_MEDIUM_AND_ABOVE",
+          },
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Imagen API error:", errorText);
+
+      // Try fallback to Gemini 2.0 Flash with image generation
+      return await generateWithGeminiFlash(apiKey, prompt, outputPath);
+    }
+
+    const data = await response.json();
+
+    // Extract image from response
+    if (data.predictions && data.predictions[0]?.bytesBase64Encoded) {
+      const imageData = data.predictions[0].bytesBase64Encoded;
+      const buffer = Buffer.from(imageData, "base64");
+
+      await fs.mkdir(path.dirname(outputPath), { recursive: true });
+      await fs.writeFile(outputPath, buffer);
+      console.log(`Image saved: ${outputPath}`);
+      return outputPath;
+    }
+
+    throw new Error("No image data in Imagen response");
+  } catch (error: any) {
+    console.error(`REST API image generation failed: ${error.message}`);
+    return DEFAULT_IMAGE;
+  }
+}
+
+/**
+ * Fallback: Generate image using Gemini 2.0 Flash
+ */
+async function generateWithGeminiFlash(
+  apiKey: string,
+  prompt: string,
+  outputPath: string
+): Promise<string> {
+  try {
+    console.log("Trying Gemini 2.0 Flash for image generation...");
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{ text: prompt }]
+          }],
+          generationConfig: {
+            responseModalities: ["IMAGE", "TEXT"],
+          },
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Gemini Flash API error: ${errorText}`);
+    }
+
+    const data = await response.json();
+
+    // Extract image from response
+    const parts = data.candidates?.[0]?.content?.parts || [];
+    for (const part of parts) {
+      if (part.inlineData?.data) {
+        const buffer = Buffer.from(part.inlineData.data, "base64");
+        await fs.mkdir(path.dirname(outputPath), { recursive: true });
+        await fs.writeFile(outputPath, buffer);
+        console.log(`Image saved with Gemini Flash: ${outputPath}`);
+        return outputPath;
+      }
+    }
+
+    throw new Error("No image data in Gemini Flash response");
+  } catch (error: any) {
+    console.error(`Gemini Flash image generation failed: ${error.message}`);
+    return DEFAULT_IMAGE;
   }
 }
 
@@ -88,81 +198,4 @@ Style guidelines:
 - Suitable for inline placement in an article
 - No text, watermarks, or logos
 - Clean composition with good visual balance`;
-}
-
-/**
- * Generate an image and save it to disk
- */
-async function generateAndSaveImage(
-  model: any,
-  prompt: string,
-  outputPath: string
-): Promise<string> {
-  try {
-    // Generate image using Gemini
-    const result = await model.generateContent({
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig: {
-        responseModalities: ["image", "text"],
-      },
-    });
-
-    const response = result.response;
-
-    // Extract image data from response
-    for (const part of response.candidates[0].content.parts) {
-      if (part.inlineData) {
-        const imageData = part.inlineData.data;
-        const buffer = Buffer.from(imageData, "base64");
-
-        // Ensure output directory exists
-        await fs.mkdir(path.dirname(outputPath), { recursive: true });
-
-        // Write image file
-        await fs.writeFile(outputPath, buffer);
-        console.log(`Image saved: ${outputPath}`);
-        return outputPath;
-      }
-    }
-
-    throw new Error("No image data in response");
-  } catch (error: any) {
-    console.error(`Image generation failed: ${error.message}`);
-    // Return default image path instead of temp path
-    return DEFAULT_IMAGE;
-  }
-}
-
-/**
- * Alternative: Use Imagen 3 directly if available
- */
-export async function generateWithImagen(
-  apiKey: string,
-  prompt: string,
-  outputPath: string
-): Promise<string> {
-  const genAI = new GoogleGenerativeAI(apiKey);
-
-  try {
-    // Imagen 3 model for higher quality images
-    const model = genAI.getGenerativeModel({ model: "imagen-3.0-generate-001" });
-
-    const result = await model.generateContent(prompt);
-    const response = result.response;
-
-    // Process and save image
-    for (const part of response.candidates?.[0]?.content?.parts || []) {
-      if (part.inlineData) {
-        const buffer = Buffer.from(part.inlineData.data, "base64");
-        await fs.mkdir(path.dirname(outputPath), { recursive: true });
-        await fs.writeFile(outputPath, buffer);
-        return outputPath;
-      }
-    }
-
-    throw new Error("No image generated");
-  } catch (error: any) {
-    console.error(`Imagen generation failed: ${error.message}`);
-    throw error;
-  }
 }
