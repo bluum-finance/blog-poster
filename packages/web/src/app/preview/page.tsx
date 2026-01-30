@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useState, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -10,12 +10,29 @@ const PLACEHOLDER_IMAGE = "https://images.unsplash.com/photo-1551288049-bebda4e3
 const PLACEHOLDER_CONTENT_IMAGE = "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=800&h=400&fit=crop";
 
 // Check if an image path is a local path that won't work in preview
-function getPreviewImageUrl(imagePath: string, isContentImage = false): string {
-  if (!imagePath) return isContentImage ? PLACEHOLDER_CONTENT_IMAGE : PLACEHOLDER_IMAGE;
-
-  // Local paths like /images/blog/... won't work in preview
-  if (imagePath.startsWith("/images/") || imagePath.startsWith("/public/")) {
+function getPreviewImageUrl(
+  imagePath: string,
+  isContentImage = false,
+  generatedCoverImage?: string,
+  generatedPostImage?: string
+): string {
+  if (!imagePath) {
+    // Use generated images if available, otherwise placeholders
+    if (isContentImage && generatedPostImage) return generatedPostImage;
+    if (!isContentImage && generatedCoverImage) return generatedCoverImage;
     return isContentImage ? PLACEHOLDER_CONTENT_IMAGE : PLACEHOLDER_IMAGE;
+  }
+
+  // Local paths like /images/blog/... won't work in preview - use generated images
+  if (imagePath.startsWith("/images/") || imagePath.startsWith("/public/")) {
+    if (isContentImage && generatedPostImage) return generatedPostImage;
+    if (!isContentImage && generatedCoverImage) return generatedCoverImage;
+    return isContentImage ? PLACEHOLDER_CONTENT_IMAGE : PLACEHOLDER_IMAGE;
+  }
+
+  // Data URLs (base64) should work
+  if (imagePath.startsWith("data:")) {
+    return imagePath;
   }
 
   // External URLs should work
@@ -23,7 +40,9 @@ function getPreviewImageUrl(imagePath: string, isContentImage = false): string {
     return imagePath;
   }
 
-  // Default to placeholder
+  // Default - use generated images if available
+  if (isContentImage && generatedPostImage) return generatedPostImage;
+  if (!isContentImage && generatedCoverImage) return generatedCoverImage;
   return isContentImage ? PLACEHOLDER_CONTENT_IMAGE : PLACEHOLDER_IMAGE;
 }
 
@@ -34,6 +53,18 @@ function PreviewContent() {
   const author = searchParams.get("author") || "Bluum Team";
   const date = searchParams.get("date") || new Date().toISOString();
   const image = searchParams.get("image") || "/images/blog/blog-img-6.png";
+
+  // Get generated images from sessionStorage
+  const [generatedCoverImage, setGeneratedCoverImage] = useState<string | undefined>();
+  const [generatedPostImage, setGeneratedPostImage] = useState<string | undefined>();
+
+  useEffect(() => {
+    // Read generated images from sessionStorage (set by main page)
+    const coverImg = sessionStorage.getItem("previewCoverImage");
+    const postImg = sessionStorage.getItem("previewPostImage");
+    if (coverImg) setGeneratedCoverImage(coverImg);
+    if (postImg) setGeneratedPostImage(postImg);
+  }, []);
 
   // Parse frontmatter from markdown if present
   let content = markdown;
@@ -65,15 +96,22 @@ function PreviewContent() {
     day: "numeric",
   });
 
-  // Get preview-safe image URL
-  const featuredImageUrl = getPreviewImageUrl(meta.image, false);
+  // Get preview-safe image URL (use generated images if available)
+  const featuredImageUrl = getPreviewImageUrl(meta.image, false, generatedCoverImage, generatedPostImage);
 
   return (
     <main style={styles.main}>
       <article style={styles.article}>
         {/* Preview Banner */}
-        <div style={styles.previewBanner}>
-          Preview Mode - Images shown are placeholders
+        <div style={{
+          ...styles.previewBanner,
+          background: generatedCoverImage
+            ? "linear-gradient(135deg, #10b981 0%, #059669 100%)"
+            : "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+        }}>
+          {generatedCoverImage
+            ? "Preview Mode - Showing AI-generated images"
+            : "Preview Mode - Images shown are placeholders"}
         </div>
 
         {/* Header */}
@@ -124,7 +162,7 @@ function PreviewContent() {
               img: ({ src, alt }) => (
                 <figure style={styles.figure}>
                   <img
-                    src={getPreviewImageUrl(src || "", true)}
+                    src={getPreviewImageUrl(src || "", true, generatedCoverImage, generatedPostImage)}
                     alt={alt || ""}
                     style={styles.contentImage}
                   />

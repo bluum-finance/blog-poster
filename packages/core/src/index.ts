@@ -64,6 +64,8 @@ export interface PostBlogResult {
   commitHash?: string;
   error?: string;
   slug?: string;
+  coverImageData?: string; // Base64 data URL for preview
+  postImageData?: string;  // Base64 data URL for preview
 }
 
 /**
@@ -140,6 +142,8 @@ export async function postBlog(options: PostBlogOptions): Promise<PostBlogResult
         blogPost,
         markdown,
         slug: blogPost.slug,
+        coverImageData: images.coverImageData,
+        postImageData: images.postImageData,
       };
     }
 

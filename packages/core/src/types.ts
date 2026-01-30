@@ -33,8 +33,10 @@ export interface NotionBlock {
 
 // Image generation
 export interface GeneratedImages {
-  coverImage: string; // Local path after saving
-  postImage: string;  // Local path after saving
+  coverImage: string; // Local path or web path
+  postImage: string;  // Local path or web path
+  coverImageData?: string; // Base64 data URL for preview
+  postImageData?: string;  // Base64 data URL for preview
 }
 
 // Config
