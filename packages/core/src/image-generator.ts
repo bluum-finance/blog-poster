@@ -3,8 +3,12 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import type { GeneratedImages } from "./types.js";
 
+// Default image to use when generation fails or is skipped
+const DEFAULT_IMAGE = "/images/blog/blog-img-6.png";
+
 /**
  * Generate blog images using Gemini's Imagen model (Nano Banana)
+ * Returns default image path if generation fails
  */
 export async function generateBlogImages(
   apiKey: string,
@@ -12,33 +16,41 @@ export async function generateBlogImages(
   description: string,
   outputDir: string
 ): Promise<GeneratedImages> {
-  const genAI = new GoogleGenerativeAI(apiKey);
+  try {
+    const genAI = new GoogleGenerativeAI(apiKey);
 
-  // Use Gemini's image generation model
-  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
+    // Use Gemini's image generation model
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
 
-  // Generate cover image prompt based on blog content
-  const coverPrompt = createCoverImagePrompt(title, description);
-  const postPrompt = createPostImagePrompt(title, description);
+    // Generate cover image prompt based on blog content
+    const coverPrompt = createCoverImagePrompt(title, description);
+    const postPrompt = createPostImagePrompt(title, description);
 
-  console.log("Generating cover image...");
-  const coverImagePath = await generateAndSaveImage(
-    model,
-    coverPrompt,
-    path.join(outputDir, "blog-cover.png")
-  );
+    console.log("Generating cover image...");
+    const coverImagePath = await generateAndSaveImage(
+      model,
+      coverPrompt,
+      path.join(outputDir, "blog-cover.png")
+    );
 
-  console.log("Generating post image...");
-  const postImagePath = await generateAndSaveImage(
-    model,
-    postPrompt,
-    path.join(outputDir, "blog-img.png")
-  );
+    console.log("Generating post image...");
+    const postImagePath = await generateAndSaveImage(
+      model,
+      postPrompt,
+      path.join(outputDir, "blog-img.png")
+    );
 
-  return {
-    coverImage: coverImagePath,
-    postImage: postImagePath,
-  };
+    return {
+      coverImage: coverImagePath,
+      postImage: postImagePath,
+    };
+  } catch (error: any) {
+    console.warn(`Image generation failed: ${error.message}. Using default image.`);
+    return {
+      coverImage: DEFAULT_IMAGE,
+      postImage: DEFAULT_IMAGE,
+    };
+  }
 }
 
 /**
@@ -116,8 +128,8 @@ async function generateAndSaveImage(
     throw new Error("No image data in response");
   } catch (error: any) {
     console.error(`Image generation failed: ${error.message}`);
-    // Return a placeholder path - user can add image manually
-    return outputPath;
+    // Return default image path instead of temp path
+    return DEFAULT_IMAGE;
   }
 }
 
