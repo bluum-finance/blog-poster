@@ -150,6 +150,10 @@ function blockToMarkdown(block: NotionBlock, prefix = ""): string {
       // Columns are handled through children
       return "";
 
+    case "raw_markdown":
+      // Raw markdown content (from MCP or direct input)
+      return prefix + (block.content?.markdown || "");
+
     default:
       // Skip unknown block types
       return "";

@@ -1,28 +1,22 @@
 {
   "name": "blog-poster",
   "version": "1.0.0",
-  "description": "Post Notion blogs to Blumm website",
-  "type": "module",
-  "main": "dist/index.js",
-  "bin": {
-    "blog-poster": "./dist/index.js"
-  },
+  "private": true,
+  "description": "Post Notion blogs to Bluum website - shared backend with MCP server and Web UI",
   "scripts": {
-    "build": "tsc",
-    "start": "node dist/index.js",
-    "dev": "tsx src/index.ts"
-  },
-  "keywords": ["notion", "blog", "astro"],
-  "author": "",
-  "license": "ISC",
-  "dependencies": {
-    "@google/generative-ai": "^0.21.0",
-    "@notionhq/client": "^2.2.14",
-    "commander": "^12.0.0"
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "dev:mcp": "pnpm --filter @blog-poster/mcp-server dev",
+    "dev:web": "pnpm --filter @blog-poster/web dev",
+    "lint": "turbo lint",
+    "clean": "turbo clean && rm -rf node_modules"
   },
   "devDependencies": {
-    "@types/node": "^20.11.0",
-    "tsx": "^4.7.0",
+    "turbo": "^2.0.0",
     "typescript": "^5.3.3"
+  },
+  "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "node": ">=18"
   }
 }
