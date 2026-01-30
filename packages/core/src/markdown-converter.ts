@@ -17,8 +17,8 @@ export function convertToBlogPost(
     meta_title: meta.meta_title || "",
     description: meta.description || extractDescription(page.blocks),
     date: meta.date || now,
-    cover_image: meta.cover_image || "/images/blog/blog-cover.png",
-    image: meta.image || "/images/blog/blog-img.png",
+    cover_image: meta.cover_image || "/images/blog/blog-img-6.png",
+    image: meta.image || "/images/blog/blog-img-6.png",
     author: meta.author || "Bluum Team",
     author_image: meta.author_image || "/images/blog/author/default.jpg",
     draft: meta.draft ?? false,
@@ -58,10 +58,14 @@ function extractDescription(blocks: NotionBlock[]): string {
   return "";
 }
 
+// Default inline image to insert in article
+const DEFAULT_INLINE_IMAGE = "/images/blog/blog-img-6.png";
+
 /**
  * Convert Notion blocks to Markdown
+ * Inserts a default image in the middle of the article
  */
-function blocksToMarkdown(blocks: NotionBlock[], indent = 0): string {
+function blocksToMarkdown(blocks: NotionBlock[], indent = 0, isTopLevel = true): string {
   const lines: string[] = [];
   const prefix = "  ".repeat(indent);
 
@@ -73,8 +77,14 @@ function blocksToMarkdown(blocks: NotionBlock[], indent = 0): string {
 
     // Handle children (for nested lists, toggles, etc.)
     if (block.children && block.children.length > 0) {
-      lines.push(blocksToMarkdown(block.children, indent + 1));
+      lines.push(blocksToMarkdown(block.children, indent + 1, false));
     }
+  }
+
+  // Insert inline image in the middle of top-level content
+  if (isTopLevel && lines.length > 4) {
+    const middleIndex = Math.floor(lines.length / 2);
+    lines.splice(middleIndex, 0, `![image](${DEFAULT_INLINE_IMAGE})`);
   }
 
   return lines.join("\n\n");
