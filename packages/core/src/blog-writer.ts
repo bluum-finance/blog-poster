@@ -13,42 +13,82 @@ const IMAGES_PATH = "current/public/images/blog";
 
 /**
  * Clone the bluum-website repository
+ * If workDir points to an existing bluum-website repo, uses that instead of cloning
  */
 export async function cloneRepository(
   workDir: string,
   githubToken?: string
 ): Promise<string> {
-  const repoDir = path.join(workDir, "bluum-website");
-
-  // Check if already cloned
-  try {
-    await fs.access(repoDir);
-    console.log("Repository already exists, pulling latest...");
-    await execAsync("git fetch origin && git checkout dev && git pull origin dev", {
-      cwd: repoDir,
-    });
-    return repoDir;
-  } catch {
-    // Clone fresh
+  // Check if workDir itself is the repo (contains .git and current directory)
+  let repoDir: string;
+  const workDirIsRepo = await isBluumWebsiteRepo(workDir);
+  
+  if (workDirIsRepo) {
+    // workDir is already the bluum-website repository
+    repoDir = workDir;
+    console.log("Using existing repository at:", repoDir);
+  } else {
+    // Check if bluum-website subdirectory exists
+    repoDir = path.join(workDir, "bluum-website");
+    const subDirIsRepo = await isBluumWebsiteRepo(repoDir);
+    
+    if (subDirIsRepo) {
+      console.log("Repository already exists, pulling latest...");
+      await execAsync("git fetch origin && git checkout dev && git pull origin dev", {
+        cwd: repoDir,
+      });
+      return repoDir;
+    }
   }
 
-  console.log("Cloning bluum-website repository...");
+  // Clone fresh if not found
+  if (!workDirIsRepo) {
+    console.log("Cloning bluum-website repository...");
 
-  // Build clone URL with token if provided
-  let cloneUrl = BLUUM_REPO_URL;
-  if (githubToken) {
-    cloneUrl = BLUUM_REPO_URL.replace(
-      "https://",
-      `https://${githubToken}@`
-    );
+    // Build clone URL with token if provided
+    let cloneUrl = BLUUM_REPO_URL;
+    if (githubToken) {
+      cloneUrl = BLUUM_REPO_URL.replace(
+        "https://",
+        `https://${githubToken}@`
+      );
+    }
+
+    await execAsync(`git clone ${cloneUrl} ${repoDir}`);
+
+    // Checkout dev branch
+    await execAsync("git checkout dev", { cwd: repoDir });
+  } else {
+    // Pull latest if using existing repo
+    try {
+      await execAsync("git fetch origin && git checkout dev && git pull origin dev", {
+        cwd: repoDir,
+      });
+    } catch (error) {
+      console.warn("Could not pull latest changes:", error);
+    }
   }
-
-  await execAsync(`git clone ${cloneUrl} ${repoDir}`);
-
-  // Checkout dev branch
-  await execAsync("git checkout dev", { cwd: repoDir });
 
   return repoDir;
+}
+
+/**
+ * Check if a directory is the bluum-website repository
+ */
+async function isBluumWebsiteRepo(dir: string): Promise<boolean> {
+  try {
+    const gitDir = path.join(dir, ".git");
+    const currentDir = path.join(dir, "current");
+    const blogPath = path.join(dir, "current", "src", "content", "blog");
+    
+    const hasGit = await fs.access(gitDir).then(() => true).catch(() => false);
+    const hasCurrent = await fs.access(currentDir).then(() => true).catch(() => false);
+    const hasBlogPath = await fs.access(blogPath).then(() => true).catch(() => false);
+    
+    return hasGit && hasCurrent && hasBlogPath;
+  } catch {
+    return false;
+  }
 }
 
 /**
