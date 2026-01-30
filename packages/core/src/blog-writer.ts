@@ -72,36 +72,46 @@ export async function writeBlogPost(
   await fs.mkdir(blogDir, { recursive: true });
   await fs.mkdir(imagesDir, { recursive: true });
 
-  // Copy images to repo
-  const imageSlug = post.slug;
-  const coverImageDest = path.join(imagesDir, `${imageSlug}-cover.png`);
-  const postImageDest = path.join(imagesDir, `${imageSlug}-img.png`);
-
+  // Use default image (blog-img-6.png already exists in repo)
+  // No need to copy images - just use the existing default path
   const imagePaths: string[] = [];
 
-  try {
-    await fs.copyFile(images.coverImage, coverImageDest);
-    imagePaths.push(coverImageDest);
-    console.log(`Copied cover image to: ${coverImageDest}`);
-  } catch (error) {
-    console.warn("Could not copy cover image, using placeholder path");
+  // Check if images are custom (not default) and need to be copied
+  const isDefaultImage = images.coverImage === "/images/blog/blog-img-6.png" ||
+                         images.coverImage.startsWith("/images/blog/");
+
+  if (!isDefaultImage) {
+    // Only copy if custom images were generated
+    const imageSlug = post.slug;
+    const coverImageDest = path.join(imagesDir, `${imageSlug}-cover.png`);
+    const postImageDest = path.join(imagesDir, `${imageSlug}-img.png`);
+
+    try {
+      await fs.copyFile(images.coverImage, coverImageDest);
+      imagePaths.push(coverImageDest);
+      console.log(`Copied cover image to: ${coverImageDest}`);
+    } catch (error) {
+      console.warn("Could not copy cover image, using default");
+    }
+
+    try {
+      await fs.copyFile(images.postImage, postImageDest);
+      imagePaths.push(postImageDest);
+      console.log(`Copied post image to: ${postImageDest}`);
+    } catch (error) {
+      console.warn("Could not copy post image, using default");
+    }
+  } else {
+    console.log("Using default image: /images/blog/blog-img-6.png");
   }
 
-  try {
-    await fs.copyFile(images.postImage, postImageDest);
-    imagePaths.push(postImageDest);
-    console.log(`Copied post image to: ${postImageDest}`);
-  } catch (error) {
-    console.warn("Could not copy post image, using placeholder path");
-  }
-
-  // Update post meta with actual image paths
+  // Keep the image paths as-is (use default or custom)
   const updatedPost: BlogPost = {
     ...post,
     meta: {
       ...post.meta,
-      cover_image: `/images/blog/${imageSlug}-cover.png`,
-      image: `/images/blog/${imageSlug}-img.png`,
+      cover_image: images.coverImage,
+      image: images.postImage,
     },
   };
 

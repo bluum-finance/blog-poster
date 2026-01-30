@@ -105,10 +105,10 @@ export async function postBlog(options: PostBlogOptions): Promise<PostBlogResult
     const blogPost = convertToBlogPost(notionPage, meta);
     progress("convert", `Converted (slug: ${blogPost.slug})`);
 
-    // Step 3: Generate images
+    // Step 3: Generate images (default to blog-img-6.png)
     let images: GeneratedImages = options.customImages || {
-      coverImage: "/images/blog/blog-cover.png",
-      postImage: "/images/blog/blog-img.png",
+      coverImage: "/images/blog/blog-img-6.png",
+      postImage: "/images/blog/blog-img-6.png",
     };
 
     if (!options.skipImages && !options.customImages && options.geminiApiKey) {
