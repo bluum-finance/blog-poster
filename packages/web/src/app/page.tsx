@@ -148,10 +148,23 @@ export default function Home() {
                 {result.slug && <p>Slug: {result.slug}</p>}
                 {result.commitHash && <p>Commit: {result.commitHash}</p>}
                 {result.markdown && (
-                  <details style={styles.preview}>
-                    <summary>Preview Markdown</summary>
-                    <pre style={styles.markdown}>{result.markdown}</pre>
-                  </details>
+                  <>
+                    <button
+                      onClick={() => {
+                        const params = new URLSearchParams({
+                          markdown: result.markdown || "",
+                        });
+                        window.open(`/preview?${params.toString()}`, "_blank");
+                      }}
+                      style={styles.viewPreviewButton}
+                    >
+                      View Rendered Preview
+                    </button>
+                    <details style={styles.preview}>
+                      <summary>View Raw Markdown</summary>
+                      <pre style={styles.markdown}>{result.markdown}</pre>
+                    </details>
+                  </>
                 )}
               </>
             ) : (
@@ -293,5 +306,17 @@ const styles: { [key: string]: React.CSSProperties } = {
     overflow: "auto",
     maxHeight: "300px",
     fontSize: "12px",
+  },
+  viewPreviewButton: {
+    width: "100%",
+    padding: "12px 20px",
+    fontSize: "14px",
+    fontWeight: "600",
+    background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+    color: "#fff",
+    border: "none",
+    borderRadius: "8px",
+    cursor: "pointer",
+    marginBottom: "12px",
   },
 };
