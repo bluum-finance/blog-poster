@@ -11,6 +11,8 @@ interface PostResult {
   markdown?: string;
   error?: string;
   logs?: string[];
+  coverImageData?: string;
+  postImageData?: string;
 }
 
 export default function Home() {
@@ -151,6 +153,13 @@ export default function Home() {
                   <>
                     <button
                       onClick={() => {
+                        // Store image data in sessionStorage (too large for URL params)
+                        if (result.coverImageData) {
+                          sessionStorage.setItem("previewCoverImage", result.coverImageData);
+                        }
+                        if (result.postImageData) {
+                          sessionStorage.setItem("previewPostImage", result.postImageData);
+                        }
                         const params = new URLSearchParams({
                           markdown: result.markdown || "",
                         });

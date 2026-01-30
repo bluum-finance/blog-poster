@@ -5,6 +5,11 @@ import type { GeneratedImages } from "./types.js";
 // Default image to use when generation fails or is skipped
 const DEFAULT_IMAGE = "/images/blog/blog-img-6.png";
 
+interface ImageResult {
+  filePath: string;
+  dataUrl?: string; // Base64 data URL for preview
+}
+
 /**
  * Generate blog images using Gemini's Imagen model
  * Returns default image path if generation fails
@@ -22,7 +27,7 @@ export async function generateBlogImages(
     // Generate cover image
     console.log("Generating cover image with Gemini Imagen...");
     const coverPrompt = createCoverImagePrompt(title, description);
-    const coverImagePath = await generateImageWithREST(
+    const coverResult = await generateImageWithREST(
       apiKey,
       coverPrompt,
       path.join(outputDir, "blog-cover.png")
@@ -31,15 +36,17 @@ export async function generateBlogImages(
     // Generate post image
     console.log("Generating post image with Gemini Imagen...");
     const postPrompt = createPostImagePrompt(title, description);
-    const postImagePath = await generateImageWithREST(
+    const postResult = await generateImageWithREST(
       apiKey,
       postPrompt,
       path.join(outputDir, "blog-img.png")
     );
 
     return {
-      coverImage: coverImagePath,
-      postImage: postImagePath,
+      coverImage: coverResult.filePath,
+      postImage: postResult.filePath,
+      coverImageData: coverResult.dataUrl,
+      postImageData: postResult.dataUrl,
     };
   } catch (error: any) {
     console.warn(`Image generation failed: ${error.message}. Using default image.`);
@@ -58,7 +65,7 @@ async function generateImageWithREST(
   apiKey: string,
   prompt: string,
   outputPath: string
-): Promise<string> {
+): Promise<ImageResult> {
   try {
     // Use Imagen 3 model for image generation
     const response = await fetch(
@@ -98,13 +105,18 @@ async function generateImageWithREST(
       await fs.mkdir(path.dirname(outputPath), { recursive: true });
       await fs.writeFile(outputPath, buffer);
       console.log(`Image saved: ${outputPath}`);
-      return outputPath;
+
+      // Return both file path and data URL for preview
+      return {
+        filePath: outputPath,
+        dataUrl: `data:image/png;base64,${imageData}`,
+      };
     }
 
     throw new Error("No image data in Imagen response");
   } catch (error: any) {
     console.error(`REST API image generation failed: ${error.message}`);
-    return DEFAULT_IMAGE;
+    return { filePath: DEFAULT_IMAGE };
   }
 }
 
@@ -115,7 +127,7 @@ async function generateWithGeminiFlash(
   apiKey: string,
   prompt: string,
   outputPath: string
-): Promise<string> {
+): Promise<ImageResult> {
   try {
     console.log("Trying Gemini 2.0 Flash for image generation...");
 
@@ -148,18 +160,26 @@ async function generateWithGeminiFlash(
     const parts = data.candidates?.[0]?.content?.parts || [];
     for (const part of parts) {
       if (part.inlineData?.data) {
-        const buffer = Buffer.from(part.inlineData.data, "base64");
+        const imageData = part.inlineData.data;
+        const mimeType = part.inlineData.mimeType || "image/png";
+        const buffer = Buffer.from(imageData, "base64");
+
         await fs.mkdir(path.dirname(outputPath), { recursive: true });
         await fs.writeFile(outputPath, buffer);
         console.log(`Image saved with Gemini Flash: ${outputPath}`);
-        return outputPath;
+
+        // Return both file path and data URL for preview
+        return {
+          filePath: outputPath,
+          dataUrl: `data:${mimeType};base64,${imageData}`,
+        };
       }
     }
 
     throw new Error("No image data in Gemini Flash response");
   } catch (error: any) {
     console.error(`Gemini Flash image generation failed: ${error.message}`);
-    return DEFAULT_IMAGE;
+    return { filePath: DEFAULT_IMAGE };
   }
 }
 
