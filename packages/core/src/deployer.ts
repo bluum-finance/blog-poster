@@ -1,92 +1,70 @@
-import { exec } from "child_process";
-import { promisify } from "util";
+import { Octokit } from "@octokit/rest";
 
-const execAsync = promisify(exec);
-
-/**
- * Deploy changes to the dev branch
- */
-export async function deployToDev(
-  repoDir: string,
-  commitMessage: string
-): Promise<{ success: boolean; commitHash?: string; error?: string }> {
-  try {
-    // Check for changes
-    const { stdout: status } = await execAsync("git status --porcelain", {
-      cwd: repoDir,
-    });
-
-    if (!status.trim()) {
-      console.log("No changes to commit");
-      return { success: true };
-    }
-
-    console.log("Changes detected:");
-    console.log(status);
-
-    // Stage all changes
-    await execAsync("git add -A", { cwd: repoDir });
-
-    // Commit
-    await execAsync(`git commit -m "${commitMessage.replace(/"/g, '\\"')}"`, {
-      cwd: repoDir,
-    });
-
-    // Get commit hash
-    const { stdout: hash } = await execAsync("git rev-parse --short HEAD", {
-      cwd: repoDir,
-    });
-
-    // Push to dev branch
-    console.log("Pushing to dev branch...");
-    await execAsync("git push origin dev", { cwd: repoDir });
-
-    console.log(`Successfully pushed commit ${hash.trim()} to dev branch`);
-
-    return {
-      success: true,
-      commitHash: hash.trim(),
-    };
-  } catch (error: any) {
-    console.error("Deployment failed:", error.message);
-    return {
-      success: false,
-      error: error.message,
-    };
-  }
-}
+const REPO_OWNER = "bluum-finance";
+const REPO_NAME = "bluum-website";
+const DEFAULT_BRANCH = "dev";
 
 /**
- * Check if there are uncommitted changes
+ * Get the latest commit SHA for a branch using GitHub API
+ * This replaces the need for git commands
  */
-export async function hasUncommittedChanges(repoDir: string): Promise<boolean> {
-  try {
-    const { stdout } = await execAsync("git status --porcelain", {
-      cwd: repoDir,
-    });
-    return stdout.trim().length > 0;
-  } catch {
-    return false;
-  }
-}
+export async function getLatestCommitSha(
+  githubToken: string,
+  branch: string = DEFAULT_BRANCH
+): Promise<string> {
+  const octokit = new Octokit({ auth: githubToken });
 
-/**
- * Get current branch name
- */
-export async function getCurrentBranch(repoDir: string): Promise<string> {
-  const { stdout } = await execAsync("git branch --show-current", {
-    cwd: repoDir,
+  const { data } = await octokit.repos.getBranch({
+    owner: REPO_OWNER,
+    repo: REPO_NAME,
+    branch,
   });
-  return stdout.trim();
+
+  return data.commit.sha;
 }
 
 /**
- * Ensure we're on the dev branch
+ * Check if a branch exists
  */
-export async function ensureDevBranch(repoDir: string): Promise<void> {
-  const branch = await getCurrentBranch(repoDir);
-  if (branch !== "dev") {
-    console.log(`Switching from ${branch} to dev branch...`);
-    await execAsync("git checkout dev", { cwd: repoDir });
+export async function branchExists(
+  githubToken: string,
+  branch: string
+): Promise<boolean> {
+  const octokit = new Octokit({ auth: githubToken });
+
+  try {
+    await octokit.repos.getBranch({
+      owner: REPO_OWNER,
+      repo: REPO_NAME,
+      branch,
+    });
+    return true;
+  } catch (error: any) {
+    if (error.status === 404) {
+      return false;
+    }
+    throw error;
   }
 }
+
+/**
+ * Get the default branch for the repository
+ */
+export async function getDefaultBranch(githubToken: string): Promise<string> {
+  const octokit = new Octokit({ auth: githubToken });
+
+  const { data } = await octokit.repos.get({
+    owner: REPO_OWNER,
+    repo: REPO_NAME,
+  });
+
+  return data.default_branch;
+}
+
+/**
+ * Note: With the GitHub API approach, we don't need explicit deploy functions.
+ * Each call to createOrUpdateFileContents in blog-writer.ts already creates a commit.
+ * The commit is pushed automatically, so there's no separate "push" step needed.
+ *
+ * This file is kept for compatibility and future enhancements (e.g., creating PRs).
+ */
