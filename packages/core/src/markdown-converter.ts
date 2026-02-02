@@ -15,7 +15,7 @@ export function convertToBlogPost(
   const fullMeta: BlogPostMeta = {
     title: meta.title || page.title,
     meta_title: meta.meta_title || "",
-    description: meta.description || extractDescription(page.blocks),
+    description: meta.description || generateSmartDescription(page.blocks, page.title),
     date: meta.date || now,
     cover_image: meta.cover_image || "/images/blog/blog-img-6.png",
     image: meta.image || "/images/blog/blog-img-6.png",
@@ -58,14 +58,64 @@ function extractDescription(blocks: NotionBlock[]): string {
   return "";
 }
 
-// Default inline image to insert in article
-const DEFAULT_INLINE_IMAGE = "/images/blog/blog-img-6.png";
+/**
+ * Generate a smart description by summarizing the article content
+ */
+function generateSmartDescription(blocks: NotionBlock[], title: string): string {
+  // Extract all paragraph text
+  const paragraphs: string[] = [];
+  
+  const extractParagraphs = (blockList: NotionBlock[]) => {
+    for (const block of blockList) {
+      if (block.type === "paragraph" && block.content?.rich_text?.length > 0) {
+        const text = richTextToPlain(block.content.rich_text).trim();
+        if (text.length > 20) { // Only include substantial paragraphs
+          paragraphs.push(text);
+        }
+      }
+      
+      // Recursively check children
+      if (block.children && block.children.length > 0) {
+        extractParagraphs(block.children);
+      }
+    }
+  };
+  
+  extractParagraphs(blocks);
+  
+  // If we have paragraphs, create a summary
+  if (paragraphs.length > 0) {
+    // Take the first 2-3 sentences from the first substantial paragraph
+    const firstParagraph = paragraphs[0];
+    const sentences = firstParagraph.split(/[.!?]+/).filter(s => s.trim().length > 0);
+    
+    if (sentences.length > 0) {
+      // Take up to 2 sentences, but limit to ~160 characters for SEO
+      let description = sentences[0].trim();
+      
+      if (description.length < 120 && sentences.length > 1) {
+        description += ". " + sentences[1].trim();
+      }
+      
+      // Trim to reasonable length
+      if (description.length > 160) {
+        description = description.slice(0, 157) + "...";
+      } else {
+        description += ".";
+      }
+      
+      return description;
+    }
+  }
+  
+  // Fallback: create generic description from title
+  return `Learn more about ${title.toLowerCase()} and how it impacts your financial journey.`;
+}
 
 /**
  * Convert Notion blocks to Markdown
- * Inserts a default image in the middle of the article
  */
-function blocksToMarkdown(blocks: NotionBlock[], indent = 0, isTopLevel = true): string {
+function blocksToMarkdown(blocks: NotionBlock[], indent = 0): string {
   const lines: string[] = [];
   const prefix = "  ".repeat(indent);
 
@@ -77,14 +127,8 @@ function blocksToMarkdown(blocks: NotionBlock[], indent = 0, isTopLevel = true):
 
     // Handle children (for nested lists, toggles, etc.)
     if (block.children && block.children.length > 0) {
-      lines.push(blocksToMarkdown(block.children, indent + 1, false));
+      lines.push(blocksToMarkdown(block.children, indent + 1));
     }
-  }
-
-  // Insert inline image in the middle of top-level content
-  if (isTopLevel && lines.length > 4) {
-    const middleIndex = Math.floor(lines.length / 2);
-    lines.splice(middleIndex, 0, `![image](${DEFAULT_INLINE_IMAGE})`);
   }
 
   return lines.join("\n\n");

@@ -51,7 +51,6 @@ export async function POST(request: NextRequest) {
     // Get credentials
     const notionApiKey = process.env.NOTION_API_KEY;
     const githubToken = process.env.GITHUB_TOKEN;
-    const geminiApiKey = process.env.GEMINI_API_KEY;
 
     if (!notionApiKey) {
       return NextResponse.json(
@@ -73,10 +72,8 @@ export async function POST(request: NextRequest) {
       notionUrl: page_url || `https://notion.so/${pageId}`,
       notionApiKey,
       githubToken,
-      geminiApiKey,
       author: author || "Bluum Team",
       draft: draft || false,
-      skipImages: !geminiApiKey,
       dryRun: false,
       onProgress: (step, msg) => {
         logs.push(`[${step}] ${msg}`);

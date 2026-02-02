@@ -9,17 +9,15 @@
 export * from "./types.js";
 export * from "./notion-reader.js";
 export * from "./markdown-converter.js";
-export * from "./image-generator.js";
 export * from "./blog-writer.js";
 export * from "./deployer.js";
 
 // Import for orchestrator
 import { createNotionClient, fetchNotionPage, extractPageId } from "./notion-reader.js";
 import { convertToBlogPost, formatBlogPost } from "./markdown-converter.js";
-import { generateBlogImages } from "./image-generator.js";
 import { cloneRepository, writeBlogPost } from "./blog-writer.js";
 import { deployToDev, ensureDevBranch } from "./deployer.js";
-import type { BlogPostMeta, NotionPage, BlogPost, GeneratedImages } from "./types.js";
+import type { BlogPostMeta, NotionPage, BlogPost } from "./types.js";
 import * as fs from "fs/promises";
 import * as path from "path";
 import * as os from "os";
@@ -32,10 +30,9 @@ export interface PostBlogOptions {
   notionUrl?: string;
   notionPage?: NotionPage;
 
-  // Credentials (can be omitted if using MCP for Notion)
+  // Credentials
   notionApiKey?: string;
   githubToken?: string;
-  geminiApiKey?: string;
 
   // Blog metadata overrides
   author?: string;
@@ -43,8 +40,7 @@ export interface PostBlogOptions {
   draft?: boolean;
 
   // Image options
-  skipImages?: boolean;
-  customImages?: GeneratedImages;
+  uploadedImagePath?: string; // Path to uploaded image file
 
   // Execution options
   dryRun?: boolean;
@@ -64,17 +60,13 @@ export interface PostBlogResult {
   commitHash?: string;
   error?: string;
   slug?: string;
-  coverImageData?: string; // Base64 data URL for preview
-  postImageData?: string;  // Base64 data URL for preview
+  imagePath?: string; // Path to the image used
 }
 
 /**
  * Main orchestrator - posts a Notion page as a blog to Bluum website
  *
- * This function can be called from:
- * - CLI
- * - MCP server
- * - Web API
+ * This function can be called from the Web API.
  */
 export async function postBlog(options: PostBlogOptions): Promise<PostBlogResult> {
   const progress = options.onProgress || ((step, msg) => console.log(`[${step}] ${msg}`));
@@ -107,30 +99,20 @@ export async function postBlog(options: PostBlogOptions): Promise<PostBlogResult
     const blogPost = convertToBlogPost(notionPage, meta);
     progress("convert", `Converted (slug: ${blogPost.slug})`);
 
-    // Step 3: Generate images (default to blog-img-6.png)
-    let images: GeneratedImages = options.customImages || {
-      coverImage: "/images/blog/blog-img-6.png",
-      postImage: "/images/blog/blog-img-6.png",
-    };
-
-    if (!options.skipImages && !options.customImages && options.geminiApiKey) {
-      progress("images", "Generating images with Gemini...");
-      const imageDir = path.join(workDir, "blog-images");
-      await fs.mkdir(imageDir, { recursive: true });
-      images = await generateBlogImages(
-        options.geminiApiKey,
-        blogPost.meta.title,
-        blogPost.meta.description,
-        imageDir
-      );
-      progress("images", "Images generated");
+    // Step 3: Determine image path
+    let imagePath = "/images/blog/blog-img-6.png"; // Default
+    
+    if (options.uploadedImagePath) {
+      // Will be copied to proper location in writeBlogPost
+      imagePath = `/images/blog/${blogPost.slug}-cover.png`;
+      progress("images", "Using uploaded image");
     } else {
-      progress("images", "Using default images");
+      progress("images", "Using default image");
     }
 
-    // Update blog post with image paths
-    blogPost.meta.cover_image = images.coverImage;
-    blogPost.meta.image = images.postImage;
+    // Update blog post with image paths (use same image for both cover and inline)
+    blogPost.meta.cover_image = imagePath;
+    blogPost.meta.image = imagePath;
 
     const markdown = formatBlogPost(blogPost);
 
@@ -142,8 +124,7 @@ export async function postBlog(options: PostBlogOptions): Promise<PostBlogResult
         blogPost,
         markdown,
         slug: blogPost.slug,
-        coverImageData: images.coverImageData,
-        postImageData: images.postImageData,
+        imagePath,
       };
     }
 
@@ -158,7 +139,7 @@ export async function postBlog(options: PostBlogOptions): Promise<PostBlogResult
     progress("repo", "Repository ready");
 
     progress("write", "Writing blog post...");
-    await writeBlogPost(repoDir, blogPost, images);
+    await writeBlogPost(repoDir, blogPost, options.uploadedImagePath);
     progress("write", `Written: ${blogPost.slug}.md`);
 
     // Step 5: Deploy
@@ -174,6 +155,7 @@ export async function postBlog(options: PostBlogOptions): Promise<PostBlogResult
         markdown,
         commitHash: result.commitHash,
         slug: blogPost.slug,
+        imagePath,
       };
     } else {
       throw new Error(result.error || "Deployment failed");

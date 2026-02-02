@@ -2,7 +2,7 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import { execSync, exec } from "child_process";
 import { promisify } from "util";
-import type { BlogPost, GeneratedImages } from "./types.js";
+import type { BlogPost } from "./types.js";
 import { formatBlogPost } from "./markdown-converter.js";
 
 const execAsync = promisify(exec);
@@ -97,10 +97,9 @@ async function isBluumWebsiteRepo(dir: string): Promise<boolean> {
 export async function writeBlogPost(
   repoDir: string,
   post: BlogPost,
-  images: GeneratedImages
+  uploadedImagePath?: string
 ): Promise<{ postPath: string; imagePaths: string[] }> {
-  // Generate filename from slug and date
-  const dateStr = post.meta.date.split("T")[0]; // YYYY-MM-DD
+  // Generate filename from slug
   const filename = `${post.slug}.md`;
 
   // Paths
@@ -112,51 +111,24 @@ export async function writeBlogPost(
   await fs.mkdir(blogDir, { recursive: true });
   await fs.mkdir(imagesDir, { recursive: true });
 
-  // Use default image (blog-img-6.png already exists in repo)
-  // No need to copy images - just use the existing default path
   const imagePaths: string[] = [];
 
-  // Check if images are custom (not default) and need to be copied
-  const isDefaultImage = images.coverImage === "/images/blog/blog-img-6.png" ||
-                         images.coverImage.startsWith("/images/blog/");
-
-  if (!isDefaultImage) {
-    // Only copy if custom images were generated
-    const imageSlug = post.slug;
-    const coverImageDest = path.join(imagesDir, `${imageSlug}-cover.png`);
-    const postImageDest = path.join(imagesDir, `${imageSlug}-img.png`);
-
+  // Handle uploaded image
+  if (uploadedImagePath) {
     try {
-      await fs.copyFile(images.coverImage, coverImageDest);
-      imagePaths.push(coverImageDest);
-      console.log(`Copied cover image to: ${coverImageDest}`);
+      const imageDestPath = path.join(imagesDir, `${post.slug}-cover.png`);
+      await fs.copyFile(uploadedImagePath, imageDestPath);
+      imagePaths.push(imageDestPath);
+      console.log(`Copied uploaded image to: ${imageDestPath}`);
     } catch (error) {
-      console.warn("Could not copy cover image, using default");
-    }
-
-    try {
-      await fs.copyFile(images.postImage, postImageDest);
-      imagePaths.push(postImageDest);
-      console.log(`Copied post image to: ${postImageDest}`);
-    } catch (error) {
-      console.warn("Could not copy post image, using default");
+      console.warn("Could not copy uploaded image, using default:", error);
     }
   } else {
     console.log("Using default image: /images/blog/blog-img-6.png");
   }
 
-  // Keep the image paths as-is (use default or custom)
-  const updatedPost: BlogPost = {
-    ...post,
-    meta: {
-      ...post.meta,
-      cover_image: images.coverImage,
-      image: images.postImage,
-    },
-  };
-
-  // Write markdown file
-  const markdown = formatBlogPost(updatedPost);
+  // Write markdown file (image paths already set in blogPost.meta)
+  const markdown = formatBlogPost(post);
   await fs.writeFile(postPath, markdown, "utf-8");
   console.log(`Blog post written to: ${postPath}`);
 

@@ -2,11 +2,10 @@
   "name": "blog-poster",
   "version": "1.0.0",
   "private": true,
-  "description": "Post Notion blogs to Bluum website - shared backend with MCP server and Web UI",
+  "description": "Post Notion blogs to Bluum website via web interface",
   "scripts": {
     "build": "turbo build",
     "dev": "turbo dev",
-    "dev:mcp": "pnpm --filter @blog-poster/mcp-server dev",
     "dev:web": "pnpm --filter @blog-poster/web dev",
     "lint": "turbo lint",
     "clean": "turbo clean && rm -rf node_modules"

@@ -11,18 +11,32 @@ interface PostResult {
   markdown?: string;
   error?: string;
   logs?: string[];
-  coverImageData?: string;
-  postImageData?: string;
+  imagePath?: string;
 }
+
+const AUTHORS = [
+  { name: "Morayo Adeniyi", image: "/images/blog/author/morayo.jpg" },
+  { name: "Tosin Oladokun", image: "/images/blog/author/tosin.png" },
+  { name: "Ope Sonusi", image: "/images/blog/author/ope.jpeg" },
+];
 
 export default function Home() {
   const [notionUrl, setNotionUrl] = useState("");
-  const [author, setAuthor] = useState("Bluum Team");
+  const [author, setAuthor] = useState("Morayo Adeniyi");
+  const [authorImage, setAuthorImage] = useState("/images/blog/author/morayo.jpg");
   const [draft, setDraft] = useState(false);
-  const [skipImages, setSkipImages] = useState(false);
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const [status, setStatus] = useState<Status>("idle");
   const [result, setResult] = useState<PostResult | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
+
+  const handleAuthorChange = (selectedAuthor: string) => {
+    setAuthor(selectedAuthor);
+    const authorData = AUTHORS.find((a) => a.name === selectedAuthor);
+    if (authorData) {
+      setAuthorImage(authorData.image);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent, dryRun: boolean) => {
     e.preventDefault();
@@ -31,16 +45,20 @@ export default function Home() {
     setLogs([]);
 
     try {
+      const formData = new FormData();
+      formData.append("notionUrl", notionUrl);
+      formData.append("author", author);
+      formData.append("authorImage", authorImage);
+      formData.append("draft", draft.toString());
+      formData.append("dryRun", dryRun.toString());
+      
+      if (imageFile) {
+        formData.append("image", imageFile);
+      }
+
       const response = await fetch("/api/post", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          notionUrl,
-          author,
-          draft,
-          skipImages,
-          dryRun,
-        }),
+        body: formData,
       });
 
       const data = await response.json();
@@ -74,13 +92,28 @@ export default function Home() {
 
           <div style={styles.field}>
             <label style={styles.label}>Author</label>
-            <input
-              type="text"
-              placeholder="Author name"
+            <select
               value={author}
-              onChange={(e) => setAuthor(e.target.value)}
+              onChange={(e) => handleAuthorChange(e.target.value)}
+              style={styles.input}
+            >
+              {AUTHORS.map((author) => (
+                <option key={author.name} value={author.name}>
+                  {author.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div style={styles.field}>
+            <label style={styles.label}>Cover Image (optional)</label>
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/jpg"
+              onChange={(e) => setImageFile(e.target.files?.[0] || null)}
               style={styles.input}
             />
+            {imageFile && <span style={styles.fileInfo}>{imageFile.name}</span>}
           </div>
 
           <div style={styles.checkboxGroup}>
@@ -91,15 +124,6 @@ export default function Home() {
                 onChange={(e) => setDraft(e.target.checked)}
               />
               <span>Mark as draft</span>
-            </label>
-
-            <label style={styles.checkbox}>
-              <input
-                type="checkbox"
-                checked={skipImages}
-                onChange={(e) => setSkipImages(e.target.checked)}
-              />
-              <span>Skip image generation</span>
             </label>
           </div>
 
@@ -149,31 +173,12 @@ export default function Home() {
                 <h3>Success!</h3>
                 {result.slug && <p>Slug: {result.slug}</p>}
                 {result.commitHash && <p>Commit: {result.commitHash}</p>}
+                {result.imagePath && <p>Image: {result.imagePath}</p>}
                 {result.markdown && (
-                  <>
-                    <button
-                      onClick={() => {
-                        // Store image data in sessionStorage (too large for URL params)
-                        if (result.coverImageData) {
-                          sessionStorage.setItem("previewCoverImage", result.coverImageData);
-                        }
-                        if (result.postImageData) {
-                          sessionStorage.setItem("previewPostImage", result.postImageData);
-                        }
-                        const params = new URLSearchParams({
-                          markdown: result.markdown || "",
-                        });
-                        window.open(`/preview?${params.toString()}`, "_blank");
-                      }}
-                      style={styles.viewPreviewButton}
-                    >
-                      View Rendered Preview
-                    </button>
-                    <details style={styles.preview}>
-                      <summary>View Raw Markdown</summary>
-                      <pre style={styles.markdown}>{result.markdown}</pre>
-                    </details>
-                  </>
+                  <details style={styles.preview}>
+                    <summary>View Raw Markdown</summary>
+                    <pre style={styles.markdown}>{result.markdown}</pre>
+                  </details>
                 )}
               </>
             ) : (
@@ -238,6 +243,11 @@ const styles: { [key: string]: React.CSSProperties } = {
     borderRadius: "8px",
     outline: "none",
     transition: "border-color 0.2s",
+  },
+  fileInfo: {
+    fontSize: "12px",
+    color: "#666",
+    marginTop: "4px",
   },
   checkboxGroup: {
     display: "flex",
@@ -315,17 +325,5 @@ const styles: { [key: string]: React.CSSProperties } = {
     overflow: "auto",
     maxHeight: "300px",
     fontSize: "12px",
-  },
-  viewPreviewButton: {
-    width: "100%",
-    padding: "12px 20px",
-    fontSize: "14px",
-    fontWeight: "600",
-    background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-    color: "#fff",
-    border: "none",
-    borderRadius: "8px",
-    cursor: "pointer",
-    marginBottom: "12px",
   },
 };
