@@ -32,13 +32,21 @@ export function convertToBlogPost(
 }
 
 /**
- * Generate URL-friendly slug from title
+ * Generate URL-friendly slug from title (limited to maxWords)
  */
-export function generateSlug(title: string): string {
-  return title
+export function generateSlug(title: string, maxWords: number = 3): string {
+  // Clean the title first
+  const cleaned = title
     .toLowerCase()
     .replace(/[^a-z0-9\s-]/g, "") // Remove special chars
-    .replace(/\s+/g, "-") // Spaces to dashes
+    .trim();
+
+  // Split into words, take first N, rejoin
+  const words = cleaned.split(/\s+/).filter(w => w.length > 0);
+  const limitedWords = words.slice(0, maxWords);
+
+  return limitedWords
+    .join("-")
     .replace(/-+/g, "-") // Collapse multiple dashes
     .replace(/^-|-$/g, ""); // Trim dashes
 }
