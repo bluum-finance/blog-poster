@@ -2,6 +2,6 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "turbo build --filter=@blog-poster/web...",
   "installCommand": "pnpm install",
-  "framework": "nextjs",
-  "outputDirectory": "packages/web/.next"
+  "outputDirectory": "packages/web/.next",
+  "framework": null
 }
