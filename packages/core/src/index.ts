@@ -15,12 +15,10 @@ export * from "./deployer.js";
 // Import for orchestrator
 import { createNotionClient, fetchNotionPage, extractPageId } from "./notion-reader.js";
 import { convertToBlogPost, formatBlogPost } from "./markdown-converter.js";
-import { cloneRepository, writeBlogPost } from "./blog-writer.js";
-import { deployToDev, ensureDevBranch } from "./deployer.js";
+import { writeBlogPostToGitHub } from "./blog-writer.js";
+import { getLatestCommitSha } from "./deployer.js";
 import type { BlogPostMeta, NotionPage, BlogPost } from "./types.js";
 import * as fs from "fs/promises";
-import * as path from "path";
-import * as os from "os";
 
 /**
  * Options for posting a blog
@@ -70,7 +68,6 @@ export interface PostBlogResult {
  */
 export async function postBlog(options: PostBlogOptions): Promise<PostBlogResult> {
   const progress = options.onProgress || ((step, msg) => console.log(`[${step}] ${msg}`));
-  const workDir = options.workDir || os.tmpdir();
 
   try {
     // Step 1: Get Notion page (from URL or pre-fetched)
@@ -101,9 +98,9 @@ export async function postBlog(options: PostBlogOptions): Promise<PostBlogResult
 
     // Step 3: Determine image path
     let imagePath = "/images/blog/blog-img-6.png"; // Default
-    
+
     if (options.uploadedImagePath) {
-      // Will be copied to proper location in writeBlogPost
+      // Will be uploaded to GitHub via API
       imagePath = `/images/blog/${blogPost.slug}-cover.png`;
       progress("images", "Using uploaded image");
     } else {
@@ -128,38 +125,45 @@ export async function postBlog(options: PostBlogOptions): Promise<PostBlogResult
       };
     }
 
-    // Step 4: Clone and write
+    // Step 4: Deploy via GitHub API
     if (!options.githubToken) {
       throw new Error("githubToken is required for deployment");
     }
 
-    progress("repo", "Cloning bluum-website repository...");
-    const repoDir = await cloneRepository(workDir, options.githubToken);
-    await ensureDevBranch(repoDir);
-    progress("repo", "Repository ready");
+    progress("github", "Preparing to push to GitHub...");
 
-    progress("write", "Writing blog post...");
-    await writeBlogPost(repoDir, blogPost, options.uploadedImagePath);
-    progress("write", `Written: ${blogPost.slug}.md`);
-
-    // Step 5: Deploy
-    progress("deploy", "Pushing to dev branch...");
-    const commitMessage = `Add blog post: ${blogPost.meta.title}`;
-    const result = await deployToDev(repoDir, commitMessage);
-
-    if (result.success) {
-      progress("done", `Published! Commit: ${result.commitHash}`);
-      return {
-        success: true,
-        blogPost,
-        markdown,
-        commitHash: result.commitHash,
-        slug: blogPost.slug,
-        imagePath,
-      };
-    } else {
-      throw new Error(result.error || "Deployment failed");
+    // Read uploaded image if provided
+    let uploadedImageBuffer: Buffer | undefined;
+    if (options.uploadedImagePath) {
+      try {
+        uploadedImageBuffer = await fs.readFile(options.uploadedImagePath);
+        progress("images", "Image file read successfully");
+      } catch (error) {
+        console.warn("Could not read uploaded image:", error);
+      }
     }
+
+    // Write blog post and image to GitHub via API
+    progress("deploy", "Pushing to dev branch via GitHub API...");
+    const { postPath, imagePath: uploadedImagePath } = await writeBlogPostToGitHub(
+      options.githubToken,
+      blogPost,
+      uploadedImageBuffer
+    );
+    progress("deploy", `Published: ${postPath}`);
+
+    // Get the latest commit SHA as confirmation
+    const commitHash = await getLatestCommitSha(options.githubToken);
+
+    progress("done", `Published! Latest commit: ${commitHash}`);
+    return {
+      success: true,
+      blogPost,
+      markdown,
+      commitHash,
+      slug: blogPost.slug,
+      imagePath: uploadedImagePath || imagePath,
+    };
   } catch (error: any) {
     progress("error", error.message);
     return {
