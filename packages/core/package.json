@@ -1,7 +1,7 @@
 {
   "name": "@blog-poster/core",
   "version": "1.0.0",
-  "description": "Core blog posting logic - Notion reader, converter, image generator, publisher",
+  "description": "Core blog posting logic - Notion reader, converter, publisher",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -17,7 +17,6 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@google/generative-ai": "^0.21.0",
     "@notionhq/client": "^2.2.14",
     "@octokit/rest": "^20.0.0"
   },
